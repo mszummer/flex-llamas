@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
 import json
-from func import get_openai_completion
+from func import get_completion
 import os
 import logging
 import re
@@ -29,22 +29,22 @@ app.add_middleware(
 )
 
 # Serve React app
-app.mount("/static", StaticFiles(directory="/home/nebius/playground/chat-frontend/build/static"), name="static")
+app.mount("/static", StaticFiles(directory="/home/nebius/flex-llamas/chat-frontend/build/static"), name="static")
 
 # Global variables
 df = None
 variable_names = []
 problem_description = ""
-verified_dependencies = set()  # Changed to a set
+verified_dependencies = set()
 hypothesis_responses = []
 
 def load_data():
     global df, variable_names, problem_description
     try:
-        df = pd.read_csv("/home/nebius/playground/main/data.csv")
+        df = pd.read_csv("/home/nebius/flex-llamas/main/data.csv")
         variable_names = df.columns.tolist()
         
-        with open("/home/nebius/playground/main/data_relationships.txt", "r") as file:
+        with open("/home/nebius/flex-llamas/main/data_relationships.txt", "r") as file:
             problem_description = file.read()
         logger.info(f"Data loaded successfully. Variables: {variable_names}")
     except Exception as e:
@@ -68,7 +68,7 @@ async def chat(chat_message: ChatMessage):
     logger.info(f"Received message: {user_message}")
     
     if user_message.lower() == "restart":
-        verified_dependencies = set()  # Reset to an empty set
+        verified_dependencies = set()
         hypothesis_responses = []
         logger.info("Game restarted")
         return JSONResponse(content={"message": "Game restarted. All progress has been reset."})
@@ -100,7 +100,7 @@ User message: {user_message}
 Example response format:
 ["variable1", "variable2"]
 """
-    plot_variables_response = get_openai_completion("You are a helpful assistant.", plot_prompt)
+    plot_variables_response = get_completion("You are a helpful assistant.", plot_prompt)
     logger.info(f"OpenAI response for plot variables: {plot_variables_response}")
     
     try:
@@ -121,7 +121,7 @@ Example response format:
         return JSONResponse(content={"message": "I'm sorry, I couldn't understand which variables to plot. Could you please specify them clearly?"})
     except ValueError as e:
         logger.error(f"Error validating plot variables: {str(e)}")
-        return JSONResponse(content={"message": "I'm sorry, I couldn't understand which variables to plot. Could you please specify them clearly?"})
+        return JSONResponse(content={"message": "I'm sorry, I couldn't get which variables to plot. Be sure to only mention available variables."})
 
     # Generate plot
     if len(plot_variables) == 1:
@@ -154,18 +154,26 @@ The user has formulated the following hypotheses, in order:
 The user's latest response is:
 {user_message}
 
-If the user's response says "restart", return the string "RESTART".
+If the user's response says "restart", just say "RESTART".
 
-If the user's response forms a hypothesis (but does not confirm it), return a paraphrase of the string "How would you check or verify this hypothesis?"
+If the user's response forms a hypothesis (but does not confirm it), paraphrase "How would you check or verify this hypothesis?" in the context of the conversation
 
-If the user's response confirms a hypothesis, check it against the problem description - is it correct? If so, return a tuple in the format (correctness_message, verified_dependencies) where verified_dependencies = ["dependent_variable", "independent_variable1 identified by the user in last turn", ..., "independent_variableN identified by the user in the last turn"] or return an empty list if no relationship is correct. The correctness message is an assessment if the user's last turn is correct, wrong, or on the right track.
+If the user's response confirms a hypothesis, check it against the problem description - is it correct? If so, just say in JSON format "(correctness_message, verified_dependencies)" where verified_dependencies = ["dependent_variable", "independent_variable1 identified by the user in last turn", ..., "independent_variableN identified by the user in the last turn"] or return an empty list if no relationship is correct. The correctness message is an assessment if the user's last turn is correct, wrong, or on the right track.
+^ in the above case, make sure what you say is valid json
+
+To be clear: *do not generate code to do the above*. Your job is to reason about the users input, and speak ONLY one of the following:
+    - "RESTART"
+    - a conversational chat message asking the user to check or verify their hypothesis
+    - a valid JSON formatted message saying the correctness message and its verified dependencies
+
+
 """
-    evaluation_result = get_openai_completion("You are a helpful assistant.", evaluation_prompt)
+    evaluation_result = get_completion("You are a helpful assistant.", evaluation_prompt)
     logger.info(f"Evaluation result: {evaluation_result}")
     
     try:
         if evaluation_result == "RESTART":
-            verified_dependencies = set()  # Reset to an empty set
+            verified_dependencies = set()
             hypothesis_responses = []
             logger.info("Game restarted")
             return JSONResponse(content={"message": "Game restarted. All progress has been reset."})
@@ -174,7 +182,7 @@ If the user's response confirms a hypothesis, check it against the problem descr
             evaluation_result = eval(evaluation_result)
             if isinstance(evaluation_result, tuple):
                 correctness_message, new_dependencies = evaluation_result
-                verified_dependencies = verified_dependencies.union(set(new_dependencies))  # Use set union
+                verified_dependencies = verified_dependencies.union(set(new_dependencies))
                 score = dependency_score(verified_dependencies)
                 response_message = f"{correctness_message}\n\nYour current score is: {score}\n\n{hypothesis_prompt}"
             else:
@@ -192,11 +200,11 @@ If the user's response confirms a hypothesis, check it against the problem descr
 
 @app.get("/{full_path:path}")
 async def serve_react_app(full_path: str):
-    file_path = f"/home/nebius/playground/chat-frontend/build/{full_path}"
+    file_path = f"/home/nebius/flex-llamas/chat-frontend/build/{full_path}"
     if os.path.isfile(file_path):
         return FileResponse(file_path)
-    return FileResponse("/home/nebius/playground/chat-frontend/build/index.html")
+    return FileResponse("/home/nebius/flex-llamas/chat-frontend/build/index.html")
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
     uvicorn.run(app, host="0.0.0.0", port=8080)
