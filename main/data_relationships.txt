@@ -1,0 +1,22 @@
+a is an independent variable
+c is an independent variable
+d is an independent variable
+b depends on a, d, and noise
+b is positively dependent on a
+b is positively dependent on d
+The effect of d on b is twice as strong as the effect of a on b
+b has a linear relationship with a and d
+b has an additive noise component
+The noise in b follows a normal distribution
+The noise in b is independent of a, c, and d
+c does not influence b
+a, c, and d are uniformly distributed
+b has a deterministic component (a + 2d) and a stochastic component (noise)
+The variance of b is constant and independent of a and d
+
+The data generation process is: 
+a ~ Uniform[0,1]
+c ~ Uniform[0,1]
+d ~ Uniform[0,1]
+noise ~ 0.5* N(0,1)
+b ~ a + 2*d + noise
